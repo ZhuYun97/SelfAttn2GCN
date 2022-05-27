@@ -1,6 +1,6 @@
 from multiprocessing import pool
 import torch
-import torch_geometric
+from torch_geometric.utils import to_undirected
 from torch_geometric.data import Data, Batch
 import scipy.sparse as sp
 import numpy as np
@@ -14,7 +14,8 @@ def adj2edges(adj):
     adj = sp.coo_matrix(adj)
     indices = np.vstack((adj.row, adj.col))
     edges = torch.LongTensor(indices) 
-    return edges
+    undirected_edges = to_undirected(edges)
+    return undirected_edges
 
 def parser(x, attention_scores, mask, threshold=0.5, type="union"):
     assert type in ['union', 'intersection', 'concat']
