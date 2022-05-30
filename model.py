@@ -1,11 +1,11 @@
-from torch_geometric.nn import GCNConv, BatchNorm, global_add_pool, global_mean_pool, global_max_pool
+from torch_geometric.nn import GCNConv, SAGEConv, GINConv, GATConv, BatchNorm, global_add_pool, global_mean_pool, global_max_pool
 from torch_geometric.nn.inits import glorot
 import torch.nn.functional as F
 import torch
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim=768, layer_num=2, hidden=128, class_num=2, activation="relu", pooling="first"):
+    def __init__(self, input_dim=768, layer_num=1, hidden=768, class_num=2, activation="relu", pooling="first", gnn_type="sage"):
         super(GCN, self).__init__()
         self.layer_num = layer_num
         self.hidden = hidden
@@ -14,17 +14,20 @@ class GCN(torch.nn.Module):
         self.pooling_type = pooling
         self.pooling = self.get_pooling(pooling)
         self.convs = torch.nn.ModuleList()
-        self.classifier = GCNConv(hidden, class_num)
+        gnn_conv = self.get_gnn_conv(gnn_type)
+        self.classifier = gnn_conv(hidden, class_num)
         self.bns = torch.nn.ModuleList()
         if self.layer_num >= 1:
-            self.convs.append(GCNConv(input_dim, hidden))
-            glorot(self.convs[0].weight)
+            self.convs.append(gnn_conv(input_dim, hidden))
+            # glorot(self.convs[0].weight)
             for i in range(layer_num-1):
-                self.convs.append(GCNConv(hidden, hidden))
-                glorot(self.convs[i].weight) # initialization
-            self.convs.append(GCNConv(hidden, hidden))
+                self.convs.append(gnn_conv(hidden, hidden))
+                # glorot(self.convs[i].weight) # initialization
+            self.convs.append(gnn_conv(hidden, hidden))
             for i in range(layer_num):
-                self.bns.append(BatchNorm(hidden))
+                self.bns.append(torch.nn.BatchNorm1d(hidden))
+        ### List of MLPs to transform virtual node at every layer
+        # self.mlp_virtualnode_list = torch.nn.ModuleList()
     
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
@@ -63,6 +66,14 @@ class GCN(torch.nn.Module):
             "first": first_pool
         }
         return poolings[name]
+    def get_gnn_conv(self, name: str):
+        gnns = {
+            "gcn": GCNConv,
+            "sage": SAGEConv,
+            "gin": GINConv,
+            "gat": GATConv
+        }
+        return gnns[name]
     
 def first_pool(x, ptr):
     ptr =  ptr[:-1]
